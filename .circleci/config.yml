@@ -1,0 +1,141 @@
+# yaml-language-server: $schema=https://circleci.com/schemas/1.0/config.json
+version: 2.1
+
+orbs:
+  python: circleci/python@1.2
+
+jobs:
+  unit_tests:
+    docker:
+      - image: python:3.10
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: |
+            pip install uv
+            uv venv
+            . .venv/bin/activate
+            uv pip install pytest pytest-cov mypy ruff coverage
+            uv pip install -e .
+      - run:
+          name: Run static analysis (ruff & mypy)
+          command: |
+            . .venv/bin/activate
+            ruff check .
+            mypy src/
+      - run:
+          name: Run unit tests
+          command: |
+            . .venv/bin/activate
+            mkdir -p test-results/unit
+            pytest src/*/tests/ --cov=src --junitxml=test-results/unit/results.xml
+            coverage report -m
+            coverage html -d coverage-unit
+      - store_test_results:
+          path: test-results
+      - store_artifacts:
+          path: test-results
+          destination: test-results/unit_tests
+      - store_artifacts:
+          path: coverage-unit
+          destination: coverage-unit
+
+  integration_tests:
+    docker:
+      - image: python:3.10
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: |
+            pip install uv
+            uv venv
+            . .venv/bin/activate
+            uv pip install pytest pytest-cov mypy ruff coverage
+            uv pip install -e .
+      - run:
+          name: Run integration tests
+          command: |
+            . .venv/bin/activate
+            mkdir -p test-results/integration
+            pytest tests/integration_tests/ --cov=src --junitxml=test-results/integration/results.xml
+            coverage report -m
+            coverage html -d coverage-integration
+      - store_test_results:
+          path: test-results
+      - store_artifacts:
+          path: test-results
+          destination: test-results/integration_tests
+      - store_artifacts:
+          path: coverage-integration
+          destination: coverage-integration
+
+  end_to_end_tests:
+    docker:
+      - image: python:3.10
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: |
+            pip install uv
+            uv venv
+            . .venv/bin/activate
+            uv pip install pytest pytest-cov mypy ruff coverage
+            uv pip install -e .
+      - run:
+          name: Run end-to-end tests
+          command: |
+            . .venv/bin/activate
+            mkdir -p test-results/e2e
+            pytest tests/end_to_end_tests/ --cov=src --junitxml=test-results/e2e/results.xml
+            coverage report -m
+            coverage html -d coverage-e2e
+      - store_test_results:
+          path: test-results
+      - store_artifacts:
+          path: test-results
+          destination: test-results/end_to_end_tests
+      - store_artifacts:
+          path: coverage-e2e
+          destination: coverage-e2e
+
+  coverage_report:
+    docker:
+      - image: python:3.10
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: |
+            pip install uv
+            uv venv
+            . .venv/bin/activate
+            uv pip install pytest pytest-cov mypy ruff coverage
+            uv pip install -e .
+      - run:
+          name: Run all tests and generate coverage report
+          command: |
+            . .venv/bin/activate
+            mkdir -p test-results/all
+            pytest --cov=src src/*/tests/ tests/integration_tests/ tests/end_to_end_tests/ --junitxml=test-results/all/results.xml
+            coverage report -m
+            coverage html -d coverage-report
+      - store_test_results:
+          path: test-results
+      - store_artifacts:
+          path: coverage-report
+          destination: coverage-report
+
+workflows:
+  test_pipeline:
+    jobs:
+      - unit_tests
+      - integration_tests
+      - end_to_end_tests
+      - coverage_report:
+          requires:
+            - unit_tests
+            - integration_tests
+            - end_to_end_tests
